@@ -231,12 +231,10 @@ impl LogParser {
                 state.player_count = caps[1].parse().unwrap_or(0);
                 state.bot_count = caps[2].parse().unwrap_or(0);
 
-                if matches!(state.match_mode, MatchMode::Unknown | MatchMode::BotMatch) {
-                    if state.player_count >= 9 {
-                        state.match_mode = MatchMode::Unranked;
-                    } else if state.player_count >= 5 {
-                        state.match_mode = MatchMode::StreetBrawl;
-                    }
+                if matches!(state.match_mode, MatchMode::Unknown | MatchMode::BotMatch)
+                    && state.player_count >= 9
+                {
+                    state.match_mode = MatchMode::Unranked;
                 }
             }
         } else if let Some(caps) = p.precaching_heroes.captures(line) {
@@ -450,6 +448,41 @@ mod tests {
         );
 
         assert_eq!(state.hero_key.as_deref(), Some("gigawatt"));
+    }
+
+    #[test]
+    fn partial_roster_does_not_infer_street_brawl() {
+        let hero_store = HeroDataStore::new(Path::new("."));
+        let mut parser = LogParser::new();
+        let mut state = GameState::new();
+        state.phase = GamePhase::MatchIntro;
+        state.match_mode = MatchMode::Unknown;
+
+        parser.process_line(
+            "[Client] Players: 5 (1 bots) / 32 humans",
+            &mut state,
+            &hero_store,
+        );
+
+        assert_eq!(state.player_count, 5);
+        assert_eq!(state.match_mode, MatchMode::Unknown);
+    }
+
+    #[test]
+    fn full_roster_infers_unranked() {
+        let hero_store = HeroDataStore::new(Path::new("."));
+        let mut parser = LogParser::new();
+        let mut state = GameState::new();
+        state.phase = GamePhase::InMatch;
+        state.match_mode = MatchMode::Unknown;
+
+        parser.process_line(
+            "[Client] Players: 12 (0 bots) / 32 humans",
+            &mut state,
+            &hero_store,
+        );
+
+        assert_eq!(state.match_mode, MatchMode::Unranked);
     }
 
     #[test]
